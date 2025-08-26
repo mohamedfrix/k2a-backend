@@ -2,10 +2,10 @@
   "name": "k2a-backend",
   "version": "1.0.0",
   "description": "K2A Car Rental Backend API",
-  "main": "dist/server.js",
+  "main": "dist/src/server.js",
   "scripts": {
     "build": "tsc && tsc-alias",
-    "start": "node dist/server.js",
+    "start": "node dist/src/server.js",
     "dev": "nodemon src/server.ts",
   "postinstall": "prisma generate",
     "validate-env": "node scripts/validate-env.js",
