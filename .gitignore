@@ -146,7 +146,7 @@ Thumbs.db
 docker-compose.override.yml
 
 # Prisma
-/prisma/migrations/dev.db*
+
 
 # Test files
 coverage/
