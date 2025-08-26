@@ -1,0 +1,265 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Admin {
+  id            String         @id @default(cuid())
+  email         String         @unique
+  firstName     String?
+  lastName      String?
+  password      String
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  refreshTokens RefreshToken[]
+  contracts     Contract[]
+
+  @@map("admins")
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  adminId   String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  admin     Admin    @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+model Vehicle {
+  id           String            @id @default(cuid())
+  make         String
+  model        String
+  year         Int
+  color        String
+  licensePlate String            @unique
+  vin          String?           @unique
+  mileage      Int?
+  fuelType     FuelType
+  transmission Transmission
+  seats        Int
+  doors        Int
+  category     VehicleCategory
+  pricePerDay  Decimal           @db.Decimal(10, 2)
+  availability Boolean           @default(true)
+  location     String
+  description  String?
+  features     String[]          // JSON array of features
+  
+  // Business Logic Fields
+  featured     Boolean           @default(false)
+  
+  // Engine & Performance Specifications
+  engine       String?           // Engine type (e.g., "2.0L Turbo")
+  power        String?           // Power output (e.g., "248 CV")
+  consumption  String?           // Fuel consumption (e.g., "6.8L/100km")
+  acceleration String?           // 0-100km/h time (e.g., "6.3s")
+  maxSpeed     String?           // Maximum speed (e.g., "235 km/h")
+  trunkCapacity String?          // Trunk/boot capacity (e.g., "550L")
+  
+  // Review System (for future use)
+  rating       Float?            @default(0.0)
+  reviewCount  Int               @default(0)
+  
+  // Relations
+  images         VehicleImage[]
+  rentalServices VehicleRentalService[]
+  contracts      Contract[]
+  
+  isActive     Boolean           @default(true)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  @@map("vehicles")
+}
+
+model VehicleImage {
+  id        String   @id @default(cuid())
+  vehicleId String
+  imageUrl  String
+  alt       String?
+  isPrimary Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@map("vehicle_images")
+}
+
+model VehicleRentalService {
+  id                String             @id @default(cuid())
+  vehicleId         String
+  rentalServiceType RentalServiceType
+  isActive          Boolean            @default(true)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  
+  @@unique([vehicleId, rentalServiceType])
+  @@map("vehicle_rental_services")
+}
+
+// Enums
+enum FuelType {
+  GASOLINE
+  DIESEL
+  ELECTRIC
+  HYBRID
+  PLUGIN_HYBRID
+}
+
+enum Transmission {
+  MANUAL
+  AUTOMATIC
+  CVT
+}
+
+enum VehicleCategory {
+  ECONOMY
+  COMPACT
+  MIDSIZE
+  FULLSIZE
+  LUXURY
+  SUV
+  VAN
+  TRUCK
+  CONVERTIBLE
+  SPORTS
+}
+
+enum RentalServiceType {
+  INDIVIDUAL
+  EVENTS
+  ENTERPRISE
+}
+
+model Client {
+  id               String            @id @default(cuid())
+  nom              String            // Last name
+  prenom           String            // First name
+  dateNaissance    DateTime          // Date of birth
+  telephone        String            // Phone number
+  email            String?           // Email (optional)
+  adresse          String            // Address
+  datePermis       DateTime          // Driver license date
+  status           ClientStatus      @default(ACTIF)
+  
+  // Additional business fields
+  numeroPermis     String?           // License number (optional)
+  lieuNaissance    String?           // Place of birth (optional)
+  nationalite      String?           // Nationality (optional)
+  profession       String?           // Profession (optional)
+  
+  // System fields
+  isActive         Boolean           @default(true)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  
+  // Relations
+  contracts        Contract[]
+
+  @@map("clients")
+  @@index([nom, prenom])
+  @@index([telephone])
+  @@index([email])
+}
+
+enum ClientStatus {
+  ACTIF
+  INACTIF
+  SUSPENDU
+}
+
+model Contract {
+  id               String            @id @default(cuid())
+  contractNumber   String            @unique
+  clientId         String
+  vehicleId        String
+  adminId          String?           // Admin who created/managed the contract
+  
+  // Booking Details
+  startDate        DateTime
+  endDate          DateTime
+  totalDays        Int
+  status           ContractStatus    @default(PENDING)
+  serviceType      RentalServiceType // INDIVIDUAL, EVENTS, ENTERPRISE
+  
+  // Pricing
+  dailyRate        Decimal           @db.Decimal(10, 2)
+  accessoriesTotal Decimal           @db.Decimal(10, 2) @default(0)
+  subtotal         Decimal           @db.Decimal(10, 2)
+  discountAmount   Decimal?          @db.Decimal(10, 2)
+  totalAmount      Decimal           @db.Decimal(10, 2)
+  
+  // Payment
+  paymentStatus    PaymentStatus     @default(PENDING)
+  paidAmount       Decimal           @db.Decimal(10, 2) @default(0)
+  
+  // Additional Info
+  notes            String?
+  pickupLocation   String?
+  dropoffLocation  String?
+  
+  // Relations
+  client           Client            @relation(fields: [clientId], references: [id])
+  vehicle          Vehicle           @relation(fields: [vehicleId], references: [id])
+  admin            Admin?            @relation(fields: [adminId], references: [id])
+  accessories      ContractAccessory[]
+  
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  @@map("contracts")
+}
+
+model ContractAccessory {
+  id          String   @id @default(cuid())
+  contractId  String
+  name        String
+  price       Decimal  @db.Decimal(10, 2)
+  quantity    Int      @default(1)
+  
+  contract    Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  
+  @@map("contract_accessories")
+}
+
+enum ContractStatus {
+  PENDING
+  CONFIRMED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  PARTIAL
+  PAID
+  REFUNDED
+}
+
+// Reviews submitted by users via the public site (footer / feedback form)
+model Review {
+  id        String   @id @default(cuid())
+  name      String
+  email     String?
+  message   String   @db.Text
+  rating    Int?
+  isPublic  Boolean  @default(false)
+  adminNote String?
+  source    String?  // optional source (e.g., 'footer')
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("reviews")
+  @@index([isPublic])
+}
