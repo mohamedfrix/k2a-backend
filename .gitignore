@@ -164,7 +164,7 @@ temp/
 secrets.json
 
 # Database dumps
-*.sql
+# *.sql
 *.dump
 
 # Backup files
