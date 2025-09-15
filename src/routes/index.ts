@@ -7,6 +7,7 @@ import vehicleRoutes from './vehicleRoutes';
 import clientRoutes from './clientRoutes';
 import contractRoutes from './contractRoutes';
 import reviewRoutes from './reviewRoutes';
+import rentRequestRoutes from './rentRequestRoutes';
 
 /**
  * Main Routes Configuration
@@ -56,6 +57,7 @@ export function createRoutes(prisma: PrismaClient, logger: Logger): Router {
   router.use('/clients', clientRoutes);
   router.use('/contracts', contractRoutes);
   router.use('/reviews', reviewRoutes);
+  router.use('/rent-requests', rentRequestRoutes);
 
   return router;
 }

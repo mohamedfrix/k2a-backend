@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nouvelle demande de location</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f8f9fa;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            color: #dc3545;
+            border-bottom: 3px solid #dc3545;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+        .urgent {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            text-align: center;
+            font-weight: bold;
+        }
+        .client-info {
+            background: #e8f4fd;
+            padding: 20px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .vehicle-info {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .details ul {
+            list-style: none;
+            padding: 0;
+        }
+        .details li {
+            padding: 8px 0;
+            border-bottom: 1px solid #dee2e6;
+        }
+        .details li:last-child {
+            border-bottom: none;
+        }
+        .details strong {
+            color: #495057;
+        }
+        .message-box {
+            background: #f1f3f4;
+            border-left: 4px solid #17a2b8;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #dee2e6;
+            color: #6c757d;
+        }
+        .logo {
+            font-size: 24px;
+            font-weight: bold;
+            color: #dc3545;
+        }
+        .action-required {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">K2A Rental - Admin</div>
+            <h1>🚨 Nouvelle demande de location</h1>
+        </div>
+        
+        <div class="urgent">
+            ⚡ Action requise : Nouvelle demande à traiter
+        </div>
+        
+        <div class="client-info details">
+            <h3 style="margin-top: 0; color: #17a2b8;">👤 Informations Client</h3>
+            <ul>
+                <li><strong>Nom :</strong> {{clientName}}</li>
+                <li><strong>Email :</strong> <a href="mailto:{{clientEmail}}">{{clientEmail}}</a></li>
+                <li><strong>Téléphone :</strong> <a href="tel:{{clientPhone}}">{{clientPhone}}</a></li>
+            </ul>
+        </div>
+        
+        <div class="vehicle-info details">
+            <h3 style="margin-top: 0; color: #28a745;">🚗 Détails de la réservation</h3>
+            <ul>
+                <li><strong>Véhicule :</strong> {{vehicleMake}} {{vehicleModel}} ({{vehicleYear}})</li>
+                <li><strong>Dates :</strong> Du <strong>{{startDate}}</strong> au <strong>{{endDate}}</strong></li>
+                <li><strong>Prix par jour :</strong> <strong>{{pricePerDay}} {{currency}}</strong></li>
+                <li><strong>Numéro de demande :</strong> <code>{{requestId}}</code></li>
+            </ul>
+        </div>
+        
+        {{#message}}
+        <div class="message-box">
+            <h4 style="margin-top: 0; color: #17a2b8;">💬 Message du client :</h4>
+            <p style="margin-bottom: 0; font-style: italic;">"{{message}}"</p>
+        </div>
+        {{/message}}
+        
+        <div class="action-required">
+            <h4 style="margin-top: 0;">📋 Actions à effectuer :</h4>
+            <ul style="margin-bottom: 0;">
+                <li>✅ Vérifier la disponibilité du véhicule</li>
+                <li>✅ Valider les informations client</li>
+                <li>✅ Contacter le client si nécessaire</li>
+                <li>✅ Mettre à jour le statut de la demande</li>
+            </ul>
+        </div>
+        
+        <div class="footer">
+            <p><strong>Demande reçue le :</strong> {{createdAt}}</p>
+            <p style="font-size: 12px; color: #868e96;">
+                Connectez-vous à l'interface d'administration pour traiter cette demande.
+            </p>
+        </div>
+    </div>
+</body>
+</html>
