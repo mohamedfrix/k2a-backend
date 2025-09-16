@@ -373,6 +373,22 @@ export class VehicleController {
     }
   };
 
+  // Get vehicle statistics comparison
+  getVehicleStatsComparison = async (req: AuthenticatedRequest, res: Response): Promise<Response> => {
+    try {
+      const period = parseInt(req.query.period as string) || 30;
+      
+      if (period <= 0 || period > 365) {
+        return this.sendError(res, 'Period must be between 1 and 365 days', 400);
+      }
+
+      const comparison = await this.vehicleService.getVehicleStatsComparison(period);
+      return this.sendSuccess(res, comparison, 'Vehicle statistics comparison retrieved successfully');
+    } catch (error) {
+      return this.handleError(error, res, 'getVehicleStatsComparison');
+    }
+  };
+
   // Bulk update vehicle availability
   bulkUpdateVehicleAvailability = async (req: AuthenticatedRequest, res: Response): Promise<Response> => {
     try {

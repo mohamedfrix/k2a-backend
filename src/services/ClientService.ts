@@ -187,6 +187,16 @@ export class ClientService {
     }
   }
 
+  async getClientStatsComparison(period: number = 30): Promise<import('../types/statistics').ClientStatsComparison> {
+    try {
+      logger.info(`Fetching client statistics comparison for period: ${period} days`);
+      return await this.clientRepository.getClientStatsComparison(period);
+    } catch (error) {
+      logger.error('Error in ClientService.getClientStatsComparison:', error);
+      throw error;
+    }
+  }
+
   // Bulk update client status
   async bulkUpdateClientStatus(clientIds: string[], status: ClientStatus): Promise<BulkOperationResult> {
     try {

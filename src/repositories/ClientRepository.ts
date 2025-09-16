@@ -331,6 +331,114 @@ export class ClientRepository {
     }
   }
 
+  async getClientStatsComparison(period: number = 30): Promise<import('../types/statistics').ClientStatsComparison> {
+    const now = new Date();
+    const currentPeriodStart = new Date(now.getTime() - period * 24 * 60 * 60 * 1000);
+    const previousPeriodStart = new Date(now.getTime() - (period * 2) * 24 * 60 * 60 * 1000);
+    const previousPeriodEnd = currentPeriodStart;
+
+    const [currentStats, previousStats] = await Promise.all([
+      this.getClientStatsByPeriod(currentPeriodStart, now),
+      this.getClientStatsByPeriod(previousPeriodStart, previousPeriodEnd)
+    ]);
+
+    const { calculatePercentageChange } = await import('../types/statistics');
+
+    const percentageChanges = {
+      totalClients: calculatePercentageChange(currentStats.totalClients, previousStats.totalClients),
+      activeClients: calculatePercentageChange(currentStats.activeClients, previousStats.activeClients),
+      inactiveClients: calculatePercentageChange(currentStats.inactiveClients, previousStats.inactiveClients),
+      suspendedClients: calculatePercentageChange(currentStats.suspendedClients, previousStats.suspendedClients),
+      recentClients: calculatePercentageChange(currentStats.recentClients, previousStats.recentClients),
+      clientsWithEmail: calculatePercentageChange(currentStats.clientsWithEmail, previousStats.clientsWithEmail),
+      clientsWithoutEmail: calculatePercentageChange(currentStats.clientsWithoutEmail, previousStats.clientsWithoutEmail),
+    };
+
+    return {
+      current: {
+        totalClients: currentStats.totalClients,
+        activeClients: currentStats.activeClients,
+        inactiveClients: currentStats.inactiveClients,
+        suspendedClients: currentStats.suspendedClients,
+        recentClients: currentStats.recentClients,
+        clientsWithEmail: currentStats.clientsWithEmail,
+        clientsWithoutEmail: currentStats.clientsWithoutEmail,
+        statusBreakdown: currentStats.statusBreakdown,
+      },
+      previous: {
+        totalClients: previousStats.totalClients,
+        activeClients: previousStats.activeClients,
+        inactiveClients: previousStats.inactiveClients,
+        suspendedClients: previousStats.suspendedClients,
+        recentClients: previousStats.recentClients,
+        clientsWithEmail: previousStats.clientsWithEmail,
+        clientsWithoutEmail: previousStats.clientsWithoutEmail,
+        statusBreakdown: previousStats.statusBreakdown,
+      },
+      percentageChanges
+    };
+  }
+
+  private async getClientStatsByPeriod(startDate: Date, endDate: Date) {
+    try {
+      const [
+        totalClients,
+        statusBreakdown,
+        recentClientsCount,
+        emailStats
+      ] = await Promise.all([
+        this.prisma.client.count({
+          where: {
+            isActive: true,
+            createdAt: { lte: endDate }
+          }
+        }),
+        this.prisma.client.groupBy({
+          by: ['status'],
+          where: {
+            isActive: true,
+            createdAt: { lte: endDate }
+          },
+          _count: { status: true }
+        }),
+        this.prisma.client.count({
+          where: {
+            isActive: true,
+            createdAt: { gte: startDate, lte: endDate }
+          }
+        }),
+        this.prisma.client.aggregate({
+          where: {
+            isActive: true,
+            createdAt: { lte: endDate }
+          },
+          _count: { email: true }
+        })
+      ]);
+
+      const activeClients = statusBreakdown.find(s => s.status === 'ACTIF')?._count.status || 0;
+      const inactiveClients = statusBreakdown.find(s => s.status === 'INACTIF')?._count.status || 0;
+      const suspendedClients = statusBreakdown.find(s => s.status === 'SUSPENDU')?._count.status || 0;
+
+      return {
+        totalClients,
+        activeClients,
+        inactiveClients,
+        suspendedClients,
+        recentClients: recentClientsCount,
+        clientsWithEmail: emailStats._count.email || 0,
+        clientsWithoutEmail: totalClients - (emailStats._count.email || 0),
+        statusBreakdown: statusBreakdown.map(item => ({
+          status: item.status,
+          count: item._count.status,
+        }))
+      };
+    } catch (error) {
+      logger.error('Error in ClientRepository.getClientStatsByPeriod:', error);
+      throw new Error('Failed to fetch client statistics for period');
+    }
+  }
+
   // Bulk status update
   async bulkUpdateStatus(clientIds: string[], status: ClientStatus): Promise<number> {
     try {

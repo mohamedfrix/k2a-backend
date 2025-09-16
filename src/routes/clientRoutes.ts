@@ -50,6 +50,17 @@ router.get(
 );
 
 /**
+ * @route   GET /api/v1/clients/stats/comparison
+ * @desc    Get client statistics comparison (current vs previous period)
+ * @access  Private (Admin only)
+ */
+router.get(
+  '/stats/comparison',
+  authenticateAdmin,
+  clientController.getClientStatsComparison
+);
+
+/**
  * @route   GET /api/v1/clients/recent
  * @desc    Get recent clients for dashboard
  * @access  Private (Admin only)

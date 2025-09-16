@@ -356,6 +356,11 @@ export class ContractService {
     return await this.contractRepository.getContractStats();
   }
 
+  // Get contract statistics comparison
+  async getContractStatsComparison(period: number = 30): Promise<import('../types/statistics').ContractStatsComparison> {
+    return await this.contractRepository.getContractStatsComparison(period);
+  }
+
   // Get dashboard data
   async getDashboardData(): Promise<ContractDashboardData> {
     return await this.contractRepository.getDashboardData();
