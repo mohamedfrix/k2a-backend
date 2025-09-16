@@ -492,16 +492,25 @@ export class ContractRepository {
       this.prisma.contract.groupBy({
         by: ['paymentStatus'],
         _count: { paymentStatus: true },
-        _sum: { paidAmount: true }
+        _sum: { paidAmount: true },
+        where: {
+          status: { not: 'CANCELLED' } // Exclude cancelled contracts from payment statistics
+        }
       }),
       this.prisma.contract.groupBy({
         by: ['serviceType'],
         _count: { serviceType: true },
-        _sum: { totalAmount: true }
+        _sum: { totalAmount: true },
+        where: {
+          status: { not: 'CANCELLED' } // Exclude cancelled contracts from service type revenue
+        }
       }),
       this.prisma.contract.aggregate({
         _sum: { totalAmount: true, paidAmount: true },
-        _avg: { totalAmount: true, totalDays: true }
+        _avg: { totalAmount: true, totalDays: true },
+        where: {
+          status: { not: 'CANCELLED' } // Exclude cancelled contracts from overall revenue calculations
+        }
       }),
       this.prisma.contract.count({
         where: {

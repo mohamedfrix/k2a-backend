@@ -277,6 +277,11 @@ export class ContractService {
       throw new Error('Contract not found');
     }
 
+    // Prevent payment updates for cancelled contracts
+    if (contract.status === 'CANCELLED') {
+      throw new Error('Cannot update payment for cancelled contracts');
+    }
+
     if (paidAmount < 0) {
       throw new Error('Paid amount cannot be negative');
     }
