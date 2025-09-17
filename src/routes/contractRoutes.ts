@@ -50,6 +50,17 @@ router.get(
 );
 
 /**
+ * @route   GET /api/v1/contracts/stats/comparison
+ * @desc    Get contract statistics comparison (current vs previous period)
+ * @access  Admin
+ */
+router.get(
+  '/stats/comparison',
+  authenticateAdmin,
+  contractController.getContractStatsComparison
+);
+
+/**
  * @route   GET /api/v1/contracts/dashboard
  * @desc    Get dashboard data
  * @access  Admin

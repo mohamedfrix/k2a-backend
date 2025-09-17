@@ -140,6 +140,10 @@ export class VehicleService {
     return this.vehicleRepository.getVehicleStats();
   }
 
+  async getVehicleStatsComparison(period: number = 30): Promise<import('../types/statistics').VehicleStatsComparison> {
+    return this.vehicleRepository.getVehicleStatsComparison(period);
+  }
+
   async checkVehicleAvailability(
     vehicleId: string,
     startDate: Date,

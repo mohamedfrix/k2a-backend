@@ -278,6 +278,22 @@ export class ContractController {
     }
   };
 
+  // Get contract statistics comparison
+  getContractStatsComparison = async (req: Request, res: Response): Promise<Response> => {
+    try {
+      const period = parseInt(req.query.period as string) || 30;
+      
+      if (period <= 0 || period > 365) {
+        return this.sendError(res, 'Period must be between 1 and 365 days', 400);
+      }
+
+      const comparison = await this.contractService.getContractStatsComparison(period);
+      return this.sendSuccess(res, comparison, 'Contract statistics comparison retrieved successfully');
+    } catch (error) {
+      return this.handleError(error, res, 'getContractStatsComparison');
+    }
+  };
+
   // Get dashboard data
   getDashboardData = async (req: Request, res: Response): Promise<Response> => {
     try {

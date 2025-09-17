@@ -72,6 +72,7 @@ model Vehicle {
   images         VehicleImage[]
   rentalServices VehicleRentalService[]
   contracts      Contract[]
+  rentRequests   RentRequest[]
   
   isActive     Boolean           @default(true)
   createdAt    DateTime          @default(now())
@@ -262,4 +263,66 @@ model Review {
 
   @@map("reviews")
   @@index([isPublic])
+}
+
+// Rent Request System
+model RentRequest {
+  id              String                      @id @default(cuid())
+  requestId       String                      @unique // Format: req_{timestamp}_{random}
+  clientName      String
+  clientEmail     String
+  clientPhone     String
+  startDate       DateTime
+  endDate         DateTime
+  message         String?                     @db.Text
+  vehicleId       String
+  vehicleMake     String
+  vehicleModel    String
+  vehicleYear     Int
+  pricePerDay     Decimal                     @db.Decimal(10, 2)
+  currency        String                      @default("DZD")
+  status          RentRequestStatus           @default(PENDING)
+  reviewedAt      DateTime?
+  reviewedBy      String?
+  adminNotes      String?                     @db.Text
+  
+  // Relations
+  vehicle         Vehicle                     @relation(fields: [vehicleId], references: [id])
+  statusHistory   RentRequestStatusHistory[]
+  
+  createdAt       DateTime                    @default(now())
+  updatedAt       DateTime                    @updatedAt
+
+  @@map("rent_requests")
+  @@index([status])
+  @@index([clientEmail])
+  @@index([vehicleId])
+  @@index([createdAt])
+  @@index([status, createdAt])
+  @@index([startDate, endDate])
+}
+
+model RentRequestStatusHistory {
+  id          String      @id @default(cuid())
+  requestId   String
+  oldStatus   RentRequestStatus?
+  newStatus   RentRequestStatus
+  changedBy   String?
+  notes       String?     @db.Text
+  changedAt   DateTime    @default(now())
+  
+  rentRequest RentRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@map("rent_request_status_history")
+  @@index([requestId])
+  @@index([changedAt])
+}
+
+enum RentRequestStatus {
+  PENDING
+  REVIEWED
+  APPROVED
+  REJECTED
+  CONTACTED
+  CONFIRMED
 }

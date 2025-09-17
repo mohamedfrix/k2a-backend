@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Demande de location approuvée</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            color: #27ae60;
+            border-bottom: 3px solid #27ae60;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+        .success-badge {
+            background: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 5px;
+            text-align: center;
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 30px;
+            border: 1px solid #c3e6cb;
+        }
+        .content {
+            color: #34495e;
+        }
+        .details {
+            background: #e8f5e8;
+            padding: 20px;
+            border-radius: 5px;
+            margin: 20px 0;
+            border-left: 4px solid #27ae60;
+        }
+        .details ul {
+            list-style: none;
+            padding: 0;
+        }
+        .details li {
+            padding: 8px 0;
+            border-bottom: 1px solid #c8e6c9;
+        }
+        .details li:last-child {
+            border-bottom: none;
+        }
+        .details strong {
+            color: #2c3e50;
+        }
+        .admin-notes {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .next-steps {
+            background: #e3f2fd;
+            padding: 20px;
+            border-radius: 5px;
+            margin: 20px 0;
+            border-left: 4px solid #2196f3;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #ecf0f1;
+            color: #7f8c8d;
+        }
+        .logo {
+            font-size: 24px;
+            font-weight: bold;
+            color: #27ae60;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">K2A Rental</div>
+            <h1>✅ Demande Approuvée</h1>
+        </div>
+        
+        <div class="success-badge">
+            🎉 Félicitations ! Votre demande de location a été approuvée
+        </div>
+        
+        <div class="content">
+            <p>Bonjour <strong>{{clientName}}</strong>,</p>
+            
+            <p>Excellente nouvelle ! Nous avons le plaisir de vous informer que votre demande de location a été <strong style="color: #27ae60;">approuvée</strong>.</p>
+            
+            <div class="details">
+                <h3 style="margin-top: 0;">📋 Récapitulatif de votre réservation</h3>
+                <ul>
+                    <li><strong>Véhicule :</strong> {{vehicleMake}} {{vehicleModel}} ({{vehicleYear}})</li>
+                    <li><strong>Dates de location :</strong> Du {{startDate}} au {{endDate}}</li>
+                    <li><strong>Prix par jour :</strong> {{pricePerDay}} {{currency}}</li>
+                    <li><strong>Numéro de demande :</strong> {{requestId}}</li>
+                </ul>
+            </div>
+            
+            {{#adminNotes}}
+            <div class="admin-notes">
+                <h4 style="margin-top: 0; color: #856404;">📝 Notes importantes :</h4>
+                <p style="margin-bottom: 0;">{{adminNotes}}</p>
+            </div>
+            {{/adminNotes}}
+            
+            <div class="next-steps">
+                <h4 style="margin-top: 0; color: #1976d2;">🔄 Prochaines étapes :</h4>
+                <ul>
+                    <li>✅ Notre équipe va vous contacter sous peu pour finaliser les détails</li>
+                    <li>📋 Préparation des documents de location</li>
+                    <li>🚗 Remise du véhicule à la date convenue</li>
+                </ul>
+            </div>
+            
+            <p>Si vous avez des questions ou souhaitez modifier quelque chose, n'hésitez pas à nous contacter rapidement.</p>
+            
+            <p>Nous avons hâte de vous servir et espérons que vous apprécierez votre expérience avec K2A Rental !</p>
+        </div>
+        
+        <div class="footer">
+            <p>Cordialement,<br><strong>L'équipe K2A Rental</strong></p>
+            <p style="font-size: 12px; color: #95a5a6;">
+                Pour toute question, contactez-nous directement par téléphone ou email.
+            </p>
+        </div>
+    </div>
+</body>
+</html>

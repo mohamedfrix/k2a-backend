@@ -277,6 +277,11 @@ export class ContractService {
       throw new Error('Contract not found');
     }
 
+    // Prevent payment updates for cancelled contracts
+    if (contract.status === 'CANCELLED') {
+      throw new Error('Cannot update payment for cancelled contracts');
+    }
+
     if (paidAmount < 0) {
       throw new Error('Paid amount cannot be negative');
     }
@@ -349,6 +354,11 @@ export class ContractService {
   // Get contract statistics
   async getContractStats(): Promise<ContractStatsResponse> {
     return await this.contractRepository.getContractStats();
+  }
+
+  // Get contract statistics comparison
+  async getContractStatsComparison(period: number = 30): Promise<import('../types/statistics').ContractStatsComparison> {
+    return await this.contractRepository.getContractStatsComparison(period);
   }
 
   // Get dashboard data

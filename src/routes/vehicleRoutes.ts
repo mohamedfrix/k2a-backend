@@ -109,6 +109,17 @@ router.get(
 );
 
 /**
+ * @route   GET /api/v1/vehicles/admin/stats/comparison
+ * @desc    Get vehicle statistics comparison (current vs previous period)
+ * @access  Private (Admin only)
+ */
+router.get(
+  '/admin/stats/comparison',
+  authenticateAdmin,
+  vehicleController.getVehicleStatsComparison
+);
+
+/**
  * @route   POST /api/v1/vehicles
  * @desc    Create new vehicle
  * @access  Private (Admin only)

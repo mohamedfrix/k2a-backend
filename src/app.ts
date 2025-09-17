@@ -127,6 +127,10 @@ export function createApp(prisma: PrismaClient, logger: Logger): express.Applica
   // API routes with versioning
   app.use(`/api/${config.server.apiVersion}`, createRoutes(prisma, logger));
 
+  // Temporary: Support non-prefixed routes for backward compatibility
+  // TODO: Remove this once frontend is updated to use /api/v1 prefix
+  app.use('/', createRoutes(prisma, logger));
+
   // 404 handler for undefined routes
   app.use(notFoundHandler);
 

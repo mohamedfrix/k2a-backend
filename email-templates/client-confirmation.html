@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Confirmation de demande de location</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            color: #2c3e50;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+        .content {
+            color: #34495e;
+        }
+        .details {
+            background: #ecf0f1;
+            padding: 20px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .details ul {
+            list-style: none;
+            padding: 0;
+        }
+        .details li {
+            padding: 8px 0;
+            border-bottom: 1px solid #bdc3c7;
+        }
+        .details li:last-child {
+            border-bottom: none;
+        }
+        .details strong {
+            color: #2c3e50;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #ecf0f1;
+            color: #7f8c8d;
+        }
+        .logo {
+            font-size: 24px;
+            font-weight: bold;
+            color: #3498db;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">K2A Rental</div>
+            <h1>Demande de location reçue</h1>
+        </div>
+        
+        <div class="content">
+            <p>Bonjour <strong>{{clientName}}</strong>,</p>
+            
+            <p>Nous avons bien reçu votre demande de location. Voici un récapitulatif de votre demande :</p>
+            
+            <div class="details">
+                <ul>
+                    <li><strong>Véhicule :</strong> {{vehicleMake}} {{vehicleModel}} ({{vehicleYear}})</li>
+                    <li><strong>Dates de location :</strong> Du {{startDate}} au {{endDate}}</li>
+                    <li><strong>Prix par jour :</strong> {{pricePerDay}} {{currency}}</li>
+                    <li><strong>Numéro de demande :</strong> {{requestId}}</li>
+                    <li><strong>Email de contact :</strong> {{clientEmail}}</li>
+                    <li><strong>Téléphone :</strong> {{clientPhone}}</li>
+                </ul>
+            </div>
+            
+            {{#message}}
+            <div class="details">
+                <strong>Votre message :</strong>
+                <p style="margin-top: 10px;">{{message}}</p>
+            </div>
+            {{/message}}
+            
+            <p>Notre équipe va examiner votre demande et vous contactera dans les <strong>24 heures</strong> pour confirmer la disponibilité et finaliser les détails de votre location.</p>
+            
+            <p>Si vous avez des questions urgentes, n'hésitez pas à nous contacter directement.</p>
+        </div>
+        
+        <div class="footer">
+            <p>Cordialement,<br><strong>L'équipe K2A Rental</strong></p>
+            <p style="font-size: 12px; color: #95a5a6;">
+                Cet email a été envoyé automatiquement. Merci de ne pas y répondre directement.
+            </p>
+        </div>
+    </div>
+</body>
+</html>

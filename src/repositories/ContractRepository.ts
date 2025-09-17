@@ -492,16 +492,25 @@ export class ContractRepository {
       this.prisma.contract.groupBy({
         by: ['paymentStatus'],
         _count: { paymentStatus: true },
-        _sum: { paidAmount: true }
+        _sum: { paidAmount: true },
+        where: {
+          status: { not: 'CANCELLED' } // Exclude cancelled contracts from payment statistics
+        }
       }),
       this.prisma.contract.groupBy({
         by: ['serviceType'],
         _count: { serviceType: true },
-        _sum: { totalAmount: true }
+        _sum: { totalAmount: true },
+        where: {
+          status: { not: 'CANCELLED' } // Exclude cancelled contracts from service type revenue
+        }
       }),
       this.prisma.contract.aggregate({
         _sum: { totalAmount: true, paidAmount: true },
-        _avg: { totalAmount: true, totalDays: true }
+        _avg: { totalAmount: true, totalDays: true },
+        where: {
+          status: { not: 'CANCELLED' } // Exclude cancelled contracts from overall revenue calculations
+        }
       }),
       this.prisma.contract.count({
         where: {
@@ -541,6 +550,95 @@ export class ContractRepository {
       })),
       
       recentContracts,
+      averageContractValue: Number(revenueData._avg.totalAmount || 0),
+      averageRentalDuration: Number(revenueData._avg.totalDays || 0)
+    };
+  }
+
+  async getContractStatsComparison(period: number = 30): Promise<import('../types/statistics').ContractStatsComparison> {
+    const now = new Date();
+    const currentPeriodStart = new Date(now.getTime() - period * 24 * 60 * 60 * 1000);
+    const previousPeriodStart = new Date(now.getTime() - (period * 2) * 24 * 60 * 60 * 1000);
+    const previousPeriodEnd = currentPeriodStart;
+
+    const [currentStats, previousStats] = await Promise.all([
+      this.getContractStatsByPeriod(currentPeriodStart, now),
+      this.getContractStatsByPeriod(previousPeriodStart, previousPeriodEnd)
+    ]);
+
+    const { calculatePercentageChange } = await import('../types/statistics');
+
+    const percentageChanges = {
+      totalContracts: calculatePercentageChange(currentStats.totalContracts, previousStats.totalContracts),
+      totalRevenue: calculatePercentageChange(currentStats.totalRevenue, previousStats.totalRevenue),
+      activeContracts: calculatePercentageChange(currentStats.activeContracts, previousStats.activeContracts),
+      completedContracts: calculatePercentageChange(currentStats.completedContracts, previousStats.completedContracts),
+      cancelledContracts: calculatePercentageChange(currentStats.cancelledContracts, previousStats.cancelledContracts),
+      pendingContracts: calculatePercentageChange(currentStats.pendingContracts, previousStats.pendingContracts),
+      averageContractValue: calculatePercentageChange(currentStats.averageContractValue, previousStats.averageContractValue),
+      averageRentalDuration: calculatePercentageChange(currentStats.averageRentalDuration, previousStats.averageRentalDuration)
+    };
+
+    return {
+      current: {
+        totalContracts: currentStats.totalContracts,
+        totalRevenue: currentStats.totalRevenue,
+        activeContracts: currentStats.activeContracts,
+        completedContracts: currentStats.completedContracts,
+        cancelledContracts: currentStats.cancelledContracts,
+        pendingContracts: currentStats.pendingContracts,
+        averageContractValue: currentStats.averageContractValue,
+        averageRentalDuration: currentStats.averageRentalDuration,
+      },
+      previous: {
+        totalContracts: previousStats.totalContracts,
+        totalRevenue: previousStats.totalRevenue,
+        activeContracts: previousStats.activeContracts,
+        completedContracts: previousStats.completedContracts,
+        cancelledContracts: previousStats.cancelledContracts,
+        pendingContracts: previousStats.pendingContracts,
+        averageContractValue: previousStats.averageContractValue,
+        averageRentalDuration: previousStats.averageRentalDuration,
+      },
+      percentageChanges
+    };
+  }
+
+  private async getContractStatsByPeriod(startDate: Date, endDate: Date) {
+    const [
+      totalContracts,
+      statusCounts,
+      revenueData
+    ] = await Promise.all([
+      this.prisma.contract.count({
+        where: {
+          createdAt: { gte: startDate, lte: endDate }
+        }
+      }),
+      this.prisma.contract.groupBy({
+        by: ['status'],
+        where: {
+          createdAt: { gte: startDate, lte: endDate }
+        },
+        _count: { status: true }
+      }),
+      this.prisma.contract.aggregate({
+        where: {
+          createdAt: { gte: startDate, lte: endDate },
+          status: { not: 'CANCELLED' } // Exclude cancelled contracts from revenue
+        },
+        _sum: { totalAmount: true, paidAmount: true },
+        _avg: { totalAmount: true, totalDays: true }
+      })
+    ]);
+
+    return {
+      totalContracts,
+      activeContracts: statusCounts.find(s => s.status === 'ACTIVE')?._count.status || 0,
+      completedContracts: statusCounts.find(s => s.status === 'COMPLETED')?._count.status || 0,
+      cancelledContracts: statusCounts.find(s => s.status === 'CANCELLED')?._count.status || 0,
+      pendingContracts: statusCounts.find(s => s.status === 'PENDING')?._count.status || 0,
+      totalRevenue: Number(revenueData._sum.totalAmount || 0),
       averageContractValue: Number(revenueData._avg.totalAmount || 0),
       averageRentalDuration: Number(revenueData._avg.totalDays || 0)
     };

@@ -391,6 +391,136 @@ export class VehicleRepository {
     };
   }
 
+  async getVehicleStatsComparison(period: number = 30): Promise<import('../types/statistics').VehicleStatsComparison> {
+    const now = new Date();
+    const currentPeriodStart = new Date(now.getTime() - period * 24 * 60 * 60 * 1000);
+    const previousPeriodStart = new Date(now.getTime() - (period * 2) * 24 * 60 * 60 * 1000);
+    const previousPeriodEnd = currentPeriodStart;
+
+    // Get utilization data from contracts for both periods
+    const [currentStats, previousStats] = await Promise.all([
+      this.getVehicleStatsByPeriod(currentPeriodStart, now),
+      this.getVehicleStatsByPeriod(previousPeriodStart, previousPeriodEnd)
+    ]);
+
+    const { calculatePercentageChange } = await import('../types/statistics');
+
+    const percentageChanges = {
+      totalVehicles: calculatePercentageChange(currentStats.totalVehicles, previousStats.totalVehicles),
+      availableVehicles: calculatePercentageChange(currentStats.availableVehicles, previousStats.availableVehicles),
+      bookedVehicles: calculatePercentageChange(currentStats.bookedVehicles, previousStats.bookedVehicles),
+      maintenanceVehicles: calculatePercentageChange(currentStats.maintenanceVehicles, previousStats.maintenanceVehicles),
+      featuredVehicles: calculatePercentageChange(currentStats.featuredVehicles, previousStats.featuredVehicles),
+      utilizationRate: calculatePercentageChange(
+        currentStats.totalVehicles > 0 ? (currentStats.bookedVehicles / currentStats.totalVehicles) * 100 : 0,
+        previousStats.totalVehicles > 0 ? (previousStats.bookedVehicles / previousStats.totalVehicles) * 100 : 0
+      )
+    };
+
+    return {
+      current: {
+        totalVehicles: currentStats.totalVehicles,
+        availableVehicles: currentStats.availableVehicles,
+        bookedVehicles: currentStats.bookedVehicles,
+        maintenanceVehicles: currentStats.maintenanceVehicles,
+        categoryBreakdown: currentStats.categoryBreakdown,
+        rentalServiceBreakdown: currentStats.rentalServiceBreakdown,
+        featuredVehicles: currentStats.featuredVehicles,
+      },
+      previous: {
+        totalVehicles: previousStats.totalVehicles,
+        availableVehicles: previousStats.availableVehicles,
+        bookedVehicles: previousStats.bookedVehicles,
+        maintenanceVehicles: previousStats.maintenanceVehicles,
+        categoryBreakdown: previousStats.categoryBreakdown,
+        rentalServiceBreakdown: previousStats.rentalServiceBreakdown,
+        featuredVehicles: previousStats.featuredVehicles,
+      },
+      percentageChanges
+    };
+  }
+
+  private async getVehicleStatsByPeriod(startDate: Date, endDate: Date) {
+    // Get vehicles that existed during this period
+    const [
+      totalVehicles,
+      categoryBreakdown,
+      rentalServiceBreakdown,
+      featuredVehicles,
+      bookedVehiclesInPeriod
+    ] = await Promise.all([
+      this.prisma.vehicle.count({ 
+        where: { 
+          isActive: true,
+          createdAt: { lte: endDate }
+        } 
+      }),
+      this.prisma.vehicle.groupBy({
+        by: ['category'],
+        where: { 
+          isActive: true,
+          createdAt: { lte: endDate }
+        },
+        _count: { category: true },
+      }),
+      this.prisma.vehicleRentalService.groupBy({
+        by: ['rentalServiceType'],
+        where: { 
+          isActive: true,
+          createdAt: { lte: endDate }
+        },
+        _count: { rentalServiceType: true },
+      }),
+      this.prisma.vehicle.count({ 
+        where: { 
+          isActive: true, 
+          featured: true,
+          createdAt: { lte: endDate }
+        } 
+      }),
+      // Count vehicles that were booked during this period
+      this.prisma.contract.findMany({
+        where: {
+          status: { in: ['ACTIVE', 'COMPLETED'] },
+          OR: [
+            {
+              startDate: { gte: startDate, lte: endDate }
+            },
+            {
+              endDate: { gte: startDate, lte: endDate }
+            },
+            {
+              startDate: { lte: startDate },
+              endDate: { gte: endDate }
+            }
+          ]
+        },
+        select: { vehicleId: true },
+        distinct: ['vehicleId']
+      })
+    ]);
+
+    const bookedVehicles = bookedVehiclesInPeriod.length;
+    const availableVehicles = totalVehicles - bookedVehicles;
+    const maintenanceVehicles = Math.max(0, totalVehicles - availableVehicles - bookedVehicles);
+
+    return {
+      totalVehicles,
+      availableVehicles,
+      bookedVehicles,
+      maintenanceVehicles,
+      categoryBreakdown: categoryBreakdown.map(item => ({
+        category: item.category,
+        count: item._count.category,
+      })),
+      rentalServiceBreakdown: rentalServiceBreakdown.map(item => ({
+        serviceType: item.rentalServiceType,
+        count: item._count.rentalServiceType,
+      })),
+      featuredVehicles,
+    };
+  }
+
   // TODO: Implement when booking system is ready
   // async checkAvailability(vehicleId: string, startDate: Date, endDate: Date): Promise<boolean> {
   //   const conflictingBooking = await this.prisma.booking.findFirst({
