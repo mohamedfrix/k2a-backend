@@ -14,6 +14,7 @@ import {
 import { ContractRepository } from '../repositories/ContractRepository';
 import { VehicleRepository } from '../repositories/VehicleRepository';
 import { ClientRepository } from '../repositories/ClientRepository';
+import * as XLSX from 'xlsx';
 
 export class ContractService {
   constructor(
@@ -22,7 +23,7 @@ export class ContractService {
     private clientRepository: ClientRepository
   ) {}
 
-  // Create a new contract
+  // Create a new contract with atomic booking conflict detection
   async createContract(input: CreateContractInput): Promise<ContractResponse> {
     // Validate client exists and is active
     const client = await this.clientRepository.findById(input.clientId);
@@ -64,26 +65,21 @@ export class ContractService {
       throw new Error('End date must be after start date');
     }
 
-    // Check vehicle availability for the requested period
-    const availabilityRequest: VehicleAvailabilityRequest = {
-      vehicleId: input.vehicleId,
-      startDate: start,
-      endDate: end
-    };
-    
-    const availability = await this.contractRepository.checkVehicleAvailability(availabilityRequest);
-    if (!availability.available) {
-      throw new Error(`Vehicle is not available for the selected dates. Conflicting contracts: ${availability.conflictingContracts.map(c => c.contractNumber).join(', ')}`);
-    }
-
     // Validate service type is supported by vehicle
     const vehicleServices = vehicle.rentalServices.map(rs => rs.rentalServiceType);
     if (!vehicleServices.includes(input.serviceType)) {
       throw new Error(`Vehicle does not support ${input.serviceType} service type`);
     }
 
-    // Create the contract
-    return await this.contractRepository.create(input);
+    // Create the contract with atomic booking validation
+    // This prevents race conditions by checking availability within the same transaction
+    const finalInput = {
+      ...input,
+      startDate: start,
+      endDate: end
+    };
+    
+    return await this.contractRepository.createWithBookingValidation(finalInput);
   }
 
   // Get all contracts with filtering and pagination
@@ -103,7 +99,7 @@ export class ContractService {
       throw new Error('Contract not found');
     }
 
-    // If dates are being changed, check availability
+    // If dates are being changed, check availability atomically
     if (input.startDate || input.endDate) {
       // Normalize to local date-only for comparison
       const toLocalDateOnly = (d: any): Date | null => {
@@ -120,16 +116,19 @@ export class ContractService {
         throw new Error('End date must be after start date');
       }
 
-      const availabilityRequest: VehicleAvailabilityRequest = {
-        vehicleId: existingContract.vehicleId,
-        startDate: start,
-        endDate: end,
-        excludeContractId: id // Exclude current contract from availability check
-      };
+      // For date changes, we need to use atomic validation to prevent race conditions
+      const validation = await this.contractRepository.validateBookingAvailabilityAtomic(
+        existingContract.vehicleId,
+        start,
+        end,
+        id // Exclude current contract from conflict check
+      );
       
-      const availability = await this.contractRepository.checkVehicleAvailability(availabilityRequest);
-      if (!availability.available) {
-        throw new Error(`Vehicle is not available for the selected dates. Conflicting contracts: ${availability.conflictingContracts.map(c => c.contractNumber).join(', ')}`);
+      if (!validation.available) {
+        const conflictDetails = validation.conflictingContracts
+          .map(c => `${c.contractNumber} (${c.client.nom} ${c.client.prenom})`)
+          .join(', ');
+        throw new Error(`Booking conflict: Vehicle is not available for the selected dates. Conflicting contracts: ${conflictDetails}`);
       }
     }
 
@@ -174,40 +173,11 @@ export class ContractService {
     return updatedContract;
   }
 
-  // Confirm contract
+  // Confirm contract with atomic booking conflict detection
   async confirmContract(id: string, adminId?: string): Promise<ContractResponse> {
-    const contract = await this.contractRepository.findById(id);
-    if (!contract) {
-      throw new Error('Contract not found');
-    }
-
-    if (contract.status !== 'PENDING') {
-      throw new Error('Only pending contracts can be confirmed');
-    }
-
-    // Double-check availability before confirming
-    const availabilityRequest: VehicleAvailabilityRequest = {
-      vehicleId: contract.vehicleId,
-      startDate: contract.startDate,
-      endDate: contract.endDate,
-      excludeContractId: id
-    };
-    
-    const availability = await this.contractRepository.checkVehicleAvailability(availabilityRequest);
-    if (!availability.available) {
-      throw new Error(`Cannot confirm contract: Vehicle is no longer available for the selected dates`);
-    }
-
-    const updatedContract = await this.contractRepository.update(id, {
-      status: 'CONFIRMED',
-      ...(adminId && { adminId })
-    });
-
-    if (!updatedContract) {
-      throw new Error('Failed to confirm contract');
-    }
-
-    return updatedContract;
+    // Use atomic confirmation method to prevent race conditions
+    // This checks availability and confirms in a single transaction
+    return await this.contractRepository.confirmContractAtomic(id, adminId);
   }
 
   // Start contract (mark as active)
@@ -366,7 +336,7 @@ export class ContractService {
     return await this.contractRepository.getDashboardData();
   }
 
-  // Bulk update contract status
+  // Bulk update contract status with atomic booking validation for CONFIRMED status
   async bulkUpdateStatus(contractIds: string[], status: 'PENDING' | 'CONFIRMED' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED', adminId?: string): Promise<BulkContractResult> {
     // Validate all contracts exist and can be updated to the new status
     const contracts = await Promise.all(
@@ -398,6 +368,29 @@ export class ContractService {
       };
     }
 
+    // Special handling for CONFIRMED status - requires atomic booking validation
+    if (status === 'CONFIRMED') {
+      let successCount = 0;
+      const confirmationErrors: Array<{ contractId: string; error: string }> = [];
+
+      // Process each confirmation individually with atomic validation
+      for (const contractId of contractIds) {
+        try {
+          await this.contractRepository.confirmContractAtomic(contractId, adminId);
+          successCount++;
+        } catch (error: any) {
+          confirmationErrors.push({ contractId, error: error.message });
+        }
+      }
+
+      return {
+        success: confirmationErrors.length === 0,
+        affectedCount: successCount,
+        errors: confirmationErrors
+      };
+    }
+
+    // For other status updates, use the regular bulk update
     return await this.contractRepository.bulkUpdateStatus(contractIds, status, adminId);
   }
 
@@ -498,5 +491,80 @@ export class ContractService {
       limit: 1000
     });
     return result.contracts;
+  }
+
+  // Export contracts to Excel using the same filtering logic as getContracts
+  async exportContractsToExcel(query: ContractQuery): Promise<Buffer> {
+    // Reuse the existing filtering logic by setting a high limit to get all matching records
+    const exportQuery = {
+      ...query,
+      page: 1,
+      limit: 50000 // Set a high limit to get all contracts matching the filters
+    };
+
+    const result = await this.contractRepository.findAll(exportQuery);
+    const contracts = result.contracts;
+
+    // Prepare data for Excel with the required columns in the specified order
+    const excelData = contracts.map(contract => {
+      // Calculate duration in days (inclusive)
+      const startDate = new Date(contract.startDate);
+      const endDate = new Date(contract.endDate);
+      const durationDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+
+      return {
+        'Contract ID': contract.contractNumber,
+        'Vehicle': `${contract.vehicle.make} ${contract.vehicle.model} (${contract.vehicle.year})`,
+        'Client (Full Name)': `${contract.client.prenom} ${contract.client.nom}`,
+        'Start Date': startDate.toISOString().split('T')[0], // Format as YYYY-MM-DD
+        'End Date': endDate.toISOString().split('T')[0], // Format as YYYY-MM-DD
+        'Duration (in days)': durationDays,
+        'Total Price': Number(contract.totalAmount),
+        'Status': contract.status,
+        'Payment Status': contract.paymentStatus
+      };
+    });
+
+    // Create workbook and worksheet
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.json_to_sheet(excelData);
+
+    // Set column widths for better readability
+    const columnWidths = [
+      { wch: 15 }, // Contract ID
+      { wch: 25 }, // Vehicle
+      { wch: 20 }, // Client
+      { wch: 12 }, // Start Date
+      { wch: 12 }, // End Date
+      { wch: 18 }, // Duration
+      { wch: 15 }, // Total Price
+      { wch: 12 }, // Status
+      { wch: 15 }  // Payment Status
+    ];
+    worksheet['!cols'] = columnWidths;
+
+    // Style the header row (make it bold)
+    const headerRange = XLSX.utils.decode_range(worksheet['!ref'] || 'A1:I1');
+    for (let col = headerRange.s.c; col <= headerRange.e.c; col++) {
+      const cellAddress = XLSX.utils.encode_cell({ r: 0, c: col });
+      if (!worksheet[cellAddress]) continue;
+      
+      worksheet[cellAddress].s = {
+        font: { bold: true },
+        fill: { fgColor: { rgb: 'E6E6FA' } }
+      };
+    }
+
+    // Add the worksheet to workbook
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Contracts');
+
+    // Generate Excel file buffer
+    const excelBuffer = XLSX.write(workbook, { 
+      type: 'buffer', 
+      bookType: 'xlsx',
+      compression: true
+    });
+
+    return excelBuffer;
   }
 }

@@ -1,5 +1,5 @@
 import { PrismaClient, Vehicle, VehicleCategory, FuelType, Transmission, RentalServiceType } from '@prisma/client';
-import { VehicleQuery, CreateVehicleRequest, UpdateVehicleRequest, VehicleWithImages, VehicleStats } from '../types/vehicle';
+import { VehicleQuery, CreateVehicleRequest, UpdateVehicleRequest, VehicleWithImages, VehicleStats, VehicleAccessoryRequest } from '../types/vehicle';
 import { PaginatedResponse } from '../types';
 import { imageService } from '@/services/ImageService';
 
@@ -20,6 +20,10 @@ export class VehicleRepository {
         createdAt: true,
         updatedAt: true,
       }
+    },
+    accessories: {
+      where: { isActive: true },
+      orderBy: { name: 'asc' as const }
     }
   };
 
@@ -33,6 +37,10 @@ export class VehicleRepository {
         imageUrl: image.imageUrl.startsWith('http') 
           ? image.imageUrl 
           : imageService.generateImageUrl(image.imageUrl)
+      })) || [],
+      accessories: vehicle.accessories?.map((accessory: any) => ({
+        ...accessory,
+        price: Number(accessory.price)
       })) || []
     };
   }
@@ -126,10 +134,7 @@ export class VehicleRepository {
       ]);
 
       return {
-        data: vehicles.map(vehicle => ({
-          ...vehicle,
-          pricePerDay: Number(vehicle.pricePerDay),
-        })) as VehicleWithImages[],
+        data: vehicles.map(vehicle => this.transformVehicleData(vehicle)),
         pagination: {
           page,
           limit,
@@ -184,7 +189,7 @@ export class VehicleRepository {
   }
 
   async create(data: CreateVehicleRequest): Promise<VehicleWithImages> {
-    const { rentalServices, ...vehicleData } = data;
+    const { rentalServices, accessories, ...vehicleData } = data;
 
     const vehicle = await this.prisma.vehicle.create({
       data: {
@@ -195,6 +200,15 @@ export class VehicleRepository {
             isActive: true,
           })),
         },
+        accessories: accessories && accessories.length > 0 ? {
+          create: accessories.map(accessory => ({
+            name: accessory.name,
+            description: accessory.description,
+            price: accessory.price,
+            category: accessory.category,
+            isActive: accessory.isActive ?? true,
+          })),
+        } : undefined,
       },
       include: this.vehicleInclude,
     });
@@ -203,11 +217,16 @@ export class VehicleRepository {
   }
 
   async update(id: string, data: UpdateVehicleRequest): Promise<VehicleWithImages | null> {
-    const { rentalServices, ...vehicleData } = data;
+    const { rentalServices, accessories, ...vehicleData } = data;
 
     // Handle rental services update separately if provided
     if (rentalServices) {
       await this.updateRentalServices(id, rentalServices);
+    }
+
+    // Handle accessories update separately if provided
+    if (accessories) {
+      await this.updateAccessories(id, accessories);
     }
 
     const vehicle = await this.prisma.vehicle.update({
@@ -241,6 +260,28 @@ export class VehicleRepository {
           rentalServiceType: serviceType,
           isActive: true,
         },
+      });
+    }
+  }
+
+  async updateAccessories(vehicleId: string, accessories: VehicleAccessoryRequest[]): Promise<void> {
+    // First, deactivate all existing accessories
+    await this.prisma.vehicleAccessory.updateMany({
+      where: { vehicleId },
+      data: { isActive: false },
+    });
+
+    // Then, create new accessories
+    if (accessories && accessories.length > 0) {
+      await this.prisma.vehicleAccessory.createMany({
+        data: accessories.map(accessory => ({
+          vehicleId,
+          name: accessory.name,
+          description: accessory.description,
+          price: accessory.price,
+          category: accessory.category,
+          isActive: accessory.isActive ?? true,
+        })),
       });
     }
   }

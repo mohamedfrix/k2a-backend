@@ -10,6 +10,7 @@ import {
   RENT_REQUEST_CONSTANTS
 } from '@/types/rentRequest';
 import { RentRequestStatus } from '@/types/rentRequest';
+import { bookingConflictService } from '@/services/BookingConflictService';
 
 /**
  * Repository layer for Rent Request operations
@@ -376,8 +377,38 @@ export class RentRequestRepository {
         vehicle_licensePlate: req.vehicle.licensePlate,
       }));
 
+      // Perform bulk approvability check to avoid N+1 queries
+      const approvabilityMap = await bookingConflictService.checkBulkRentRequestApprovability(
+        transformedRequests.map(req => ({
+          id: req.id,
+          requestId: req.requestId,
+          vehicleId: req.vehicleId,
+          startDate: req.startDate,
+          endDate: req.endDate,
+          status: req.status
+        }))
+      );
+
+      // Add computed isApprovable field to each request
+      const requestsWithApprovability = transformedRequests.map(req => {
+        const approvability = approvabilityMap.get(req.id);
+        return {
+          ...req,
+          isApprovable: approvability?.isApprovable || false,
+          // Include conflict details for debugging/admin interface (optional)
+          ...(approvability?.conflictingBookings && approvability.conflictingBookings.length > 0 && {
+            conflictingBookings: approvability.conflictingBookings
+          })
+        };
+      });
+
+      logger.debug('Added approvability status to rent requests', {
+        totalRequests: requestsWithApprovability.length,
+        approvableCount: requestsWithApprovability.filter(r => r.isApprovable).length
+      });
+
       return {
-        requests: transformedRequests,
+        requests: requestsWithApprovability,
         total,
       };
     } catch (error) {
@@ -641,6 +672,128 @@ export class RentRequestRepository {
       logger.error('Error fetching rent request statistics:', { error });
       throw new Error('Failed to fetch statistics');
     }
+  }
+
+  /**
+   * Update rent request with atomic conflict validation
+   * This method specifically handles status transitions to APPROVED with booking conflict detection
+   */
+  async updateRentRequestWithConflictValidation(
+    id: string,
+    data: UpdateRentRequestData,
+    adminId?: string
+  ): Promise<any> {
+    return await prisma.$transaction(async (tx) => {
+      // Step 1: Get the existing request
+      const existingRequest = await tx.rentRequest.findUnique({
+        where: { id },
+        include: {
+          vehicle: {
+            select: {
+              id: true,
+              make: true,
+              model: true,
+              year: true,
+              color: true,
+              licensePlate: true
+            }
+          }
+        }
+      });
+
+      if (!existingRequest) {
+        throw new Error('Demande de location non trouvée');
+      }
+
+      // Step 2: If approving the request, validate for conflicts
+      if (data.status === 'APPROVED' && existingRequest.status !== 'APPROVED') {
+        logger.debug('Validating conflicts for rent request approval', {
+          requestId: existingRequest.requestId,
+          vehicleId: existingRequest.vehicleId,
+          startDate: existingRequest.startDate,
+          endDate: existingRequest.endDate
+        });
+
+        // Check for conflicts using unified booking conflict detection
+        const { bookingConflictService } = await import('@/services/BookingConflictService');
+        await bookingConflictService.validateVehicleAvailabilityOrThrow(
+          existingRequest.vehicleId,
+          existingRequest.startDate,
+          existingRequest.endDate,
+          undefined, // No contract to exclude
+          id, // Exclude this request from validation
+          tx
+        );
+
+        logger.info('Rent request approval validated - no conflicts found', {
+          requestId: existingRequest.requestId,
+          vehicleId: existingRequest.vehicleId
+        });
+      }
+
+      // Step 3: Prepare update data
+      const updateData: any = {};
+      
+      if (data.status !== undefined) {
+        updateData.status = data.status;
+        updateData.reviewedAt = new Date();
+        if (adminId) {
+          updateData.reviewedBy = adminId;
+        }
+      }
+
+      if (data.adminNotes !== undefined) {
+        updateData.adminNotes = data.adminNotes;
+      }
+
+      // Step 4: Update the request
+      const updatedRequest = await tx.rentRequest.update({
+        where: { id },
+        data: updateData,
+        include: {
+          vehicle: {
+            select: {
+              id: true,
+              make: true,
+              model: true,
+              year: true,
+              color: true,
+              licensePlate: true
+            }
+          }
+        }
+      });
+
+      // Step 5: Create status history entry if status changed
+      if (data.status && data.status !== existingRequest.status) {
+        await tx.rentRequestStatusHistory.create({
+          data: {
+            requestId: id,
+            oldStatus: existingRequest.status as any,
+            newStatus: data.status as any,
+            changedBy: adminId || 'SYSTEM',
+            notes: data.adminNotes || null,
+          }
+        });
+
+        logger.info('Rent request status updated with conflict validation', {
+          requestId: updatedRequest.requestId,
+          fromStatus: existingRequest.status,
+          toStatus: data.status,
+          adminId
+        });
+      }
+
+      return {
+        ...updatedRequest,
+        pricePerDay: Number(updatedRequest.pricePerDay),
+        vehicle_make: updatedRequest.vehicle.make,
+        vehicle_model: updatedRequest.vehicle.model,
+        vehicle_year: updatedRequest.vehicle.year,
+        vehicle_color: updatedRequest.vehicle.color,
+        vehicle_licensePlate: updatedRequest.vehicle.licensePlate,
+      };
+    });
   }
 }
 

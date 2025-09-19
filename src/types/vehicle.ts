@@ -16,6 +16,25 @@ export interface VehicleQuery extends BaseQuery {
   rentalServices?: RentalServiceType[];
 }
 
+export interface VehicleAccessoryRequest {
+  name: string;
+  description?: string;
+  price: number;
+  category?: string;
+  isActive?: boolean;
+}
+
+export interface VehicleAccessoryResponse {
+  id: string;
+  name: string;
+  description?: string;
+  price: number;
+  category?: string;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export interface CreateVehicleRequest {
   make: string;
   model: string;
@@ -47,6 +66,9 @@ export interface CreateVehicleRequest {
   
   // Rental Services (at least one required)
   rentalServices: RentalServiceType[];
+  
+  // Accessories with pricing
+  accessories?: VehicleAccessoryRequest[];
 }
 
 export interface UpdateVehicleRequest extends Partial<CreateVehicleRequest> {
@@ -102,6 +124,7 @@ export interface VehicleWithImages {
   // Relations
   images: VehicleImageResponse[];
   rentalServices: VehicleRentalService[];
+  accessories: VehicleAccessoryResponse[];
   
   isActive: boolean;
   createdAt: Date;

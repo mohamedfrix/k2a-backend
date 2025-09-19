@@ -62,6 +62,21 @@ export interface RentRequestWithVehicle {
   adminNotes?: string;
   createdAt: Date;
   updatedAt: Date;
+  // Computed field for proactive UI - indicates if request can be approved
+  isApprovable?: boolean;
+  // Optional field for debugging/admin interface showing conflict details
+  conflictingBookings?: Array<{
+    id: string;
+    type: 'CONTRACT' | 'RENT_REQUEST';
+    identifier: string;
+    startDate: Date;
+    endDate: Date;
+    status: string;
+    client: {
+      nom: string;
+      prenom: string;
+    };
+  }>;
   vehicle?: {
     id: string;
     make: string;

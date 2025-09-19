@@ -409,4 +409,49 @@ export class ContractController {
       return this.handleError(error, res, 'autoUpdateStatuses');
     }
   };
+
+  // Export contracts to Excel file
+  exportContracts = async (req: Request, res: Response): Promise<Response> => {
+    try {
+      // Use the same query parsing logic as getContracts
+      const query: ContractQuery = {
+        page: parseInt(req.query.page as string) || 1,
+        limit: parseInt(req.query.limit as string) || 10,
+        search: req.query.search as string,
+        clientId: req.query.clientId as string,
+        vehicleId: req.query.vehicleId as string,
+        status: req.query.status as any,
+        paymentStatus: req.query.paymentStatus as any,
+        serviceType: req.query.serviceType as any,
+        contractNumber: req.query.contractNumber as string,
+        sortBy: req.query.sortBy as any || 'createdAt',
+        sortOrder: req.query.sortOrder as any || 'desc'
+      };
+
+      // Parse date filters if provided
+      if (req.query.startDate) {
+        query.startDate = new Date(req.query.startDate as string);
+      }
+      if (req.query.endDate) {
+        query.endDate = new Date(req.query.endDate as string);
+      }
+
+      // Generate Excel file
+      const excelBuffer = await this.contractService.exportContractsToExcel(query);
+
+      // Generate filename with current date
+      const currentDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+      const filename = `contracts_export_${currentDate}.xlsx`;
+
+      // Set proper headers for file download
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.setHeader('Content-Length', excelBuffer.length.toString());
+
+      // Send the Excel file
+      return res.send(excelBuffer);
+    } catch (error) {
+      return this.handleError(error, res, 'exportContracts');
+    }
+  };
 }

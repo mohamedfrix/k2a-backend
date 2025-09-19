@@ -182,8 +182,10 @@ export class RentRequestService {
         this.validateStatusTransition(currentRequest.status, data.status);
       }
 
-      // Update the request
-      const updatedRequest = await rentRequestRepository.updateRentRequest(id, data, adminId);
+      // Update the request with conflict validation for APPROVED status
+      const updatedRequest = data.status === 'APPROVED' 
+        ? await rentRequestRepository.updateRentRequestWithConflictValidation(id, data, adminId)
+        : await rentRequestRepository.updateRentRequest(id, data, adminId);
 
       // Send status update email if status changed
       if (data.status && data.status !== currentRequest.status) {

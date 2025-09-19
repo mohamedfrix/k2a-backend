@@ -11,6 +11,7 @@ import {
 } from '../types/client';
 import { validateClientDates } from '../validators/clientValidators';
 import { logger } from '../utils/logger';
+import * as XLSX from 'xlsx';
 
 export class ClientService {
   private clientRepository: ClientRepository;
@@ -357,6 +358,117 @@ export class ClientService {
       };
     } catch (error) {
       logger.error('Error in ClientService.getClientCountByStatus:', error);
+      throw error;
+    }
+  }
+
+  // Export clients to Excel using the same filtering logic as getAllClients
+  async exportClientsToExcel(query: ClientQuery): Promise<Buffer> {
+    try {
+      // Reuse the existing filtering logic by setting a high limit to get all matching records
+      const exportQuery = {
+        ...query,
+        page: 1,
+        limit: 50000 // Set a high limit to get all clients matching the filters
+      };
+
+      const result = await this.clientRepository.findMany(exportQuery);
+      const clients = result.clients;
+
+      // Prepare data for Excel with a comprehensive set of columns
+      const excelData = clients.map(client => {
+        // Format dates properly
+        const formatDate = (date: Date): string => {
+          return date.toISOString().split('T')[0]; // Format as YYYY-MM-DD
+        };
+
+        // Calculate age from date of birth
+        const calculateAge = (birthDate: Date): number => {
+          const today = new Date();
+          let age = today.getFullYear() - birthDate.getFullYear();
+          const monthDiff = today.getMonth() - birthDate.getMonth();
+          if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+            age--;
+          }
+          return age;
+        };
+
+        return {
+          'Client ID': client.id,
+          'First Name': client.prenom,
+          'Last Name': client.nom,
+          'Full Name': `${client.prenom} ${client.nom}`,
+          'Date of Birth': formatDate(client.dateNaissance),
+          'Age': calculateAge(client.dateNaissance),
+          'Phone': client.telephone,
+          'Email': client.email || 'N/A',
+          'Address': client.adresse,
+          'License Date': formatDate(client.datePermis),
+          'License Number': client.numeroPermis || 'N/A',
+          'Place of Birth': client.lieuNaissance || 'N/A',
+          'Nationality': client.nationalite || 'N/A',
+          'Profession': client.profession || 'N/A',
+          'Status': client.status,
+          'Active': client.isActive ? 'Yes' : 'No',
+          'Created At': formatDate(client.createdAt),
+          'Updated At': formatDate(client.updatedAt)
+        };
+      });
+
+      // Create workbook and worksheet
+      const workbook = XLSX.utils.book_new();
+      const worksheet = XLSX.utils.json_to_sheet(excelData);
+
+      // Set column widths for better readability
+      const columnWidths = [
+        { wch: 20 }, // Client ID
+        { wch: 15 }, // First Name
+        { wch: 15 }, // Last Name
+        { wch: 25 }, // Full Name
+        { wch: 12 }, // Date of Birth
+        { wch: 8 },  // Age
+        { wch: 15 }, // Phone
+        { wch: 25 }, // Email
+        { wch: 30 }, // Address
+        { wch: 12 }, // License Date
+        { wch: 15 }, // License Number
+        { wch: 20 }, // Place of Birth
+        { wch: 15 }, // Nationality
+        { wch: 20 }, // Profession
+        { wch: 12 }, // Status
+        { wch: 8 },  // Active
+        { wch: 12 }, // Created At
+        { wch: 12 }  // Updated At
+      ];
+      worksheet['!cols'] = columnWidths;
+
+      // Style the header row (make it bold)
+      if (worksheet['!ref']) {
+        const headerRange = XLSX.utils.decode_range(worksheet['!ref']);
+        for (let col = headerRange.s.c; col <= headerRange.e.c; col++) {
+          const cellAddress = XLSX.utils.encode_cell({ r: 0, c: col });
+          if (!worksheet[cellAddress]) continue;
+          
+          worksheet[cellAddress].s = {
+            font: { bold: true },
+            fill: { fgColor: { rgb: 'E6E6FA' } }
+          };
+        }
+      }
+
+      // Add the worksheet to workbook
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Clients');
+
+      // Generate Excel file buffer
+      const excelBuffer = XLSX.write(workbook, { 
+        type: 'buffer', 
+        bookType: 'xlsx',
+        compression: true
+      });
+
+      return excelBuffer;
+    } catch (error) {
+      logger.error('Error in ClientService.exportClientsToExcel:', error);
       throw error;
     }
   }

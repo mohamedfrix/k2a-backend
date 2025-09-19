@@ -17,6 +17,17 @@ const clientController = new ClientController();
 // Admin-only routes - All client operations require admin authentication
 
 /**
+ * @route   GET /api/v1/clients/export
+ * @desc    Export clients to Excel file with filtering
+ * @access  Private (Admin only)
+ */
+router.get(
+  '/export',
+  authenticateAdmin,
+  clientController.exportClients
+);
+
+/**
  * @route   GET /api/v1/clients
  * @desc    Get all clients with filters and pagination
  * @access  Private (Admin only)
