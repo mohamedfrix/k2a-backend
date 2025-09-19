@@ -126,10 +126,7 @@ export class VehicleRepository {
       ]);
 
       return {
-        data: vehicles.map(vehicle => ({
-          ...vehicle,
-          pricePerDay: Number(vehicle.pricePerDay),
-        })) as VehicleWithImages[],
+        data: vehicles.map(vehicle => this.transformVehicleData(vehicle)),
         pagination: {
           page,
           limit,
