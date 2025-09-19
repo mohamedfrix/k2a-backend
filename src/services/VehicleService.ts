@@ -29,7 +29,10 @@ export class VehicleService {
     // Check VIN if provided
     if (data.vin) {
       const existingVin = await this.prisma.vehicle.findUnique({
-        where: { vin: data.vin },
+        where: { 
+          vin: data.vin,
+          isActive: true 
+        },
       });
 
       if (existingVin) {
@@ -68,7 +71,10 @@ export class VehicleService {
     // Check VIN uniqueness if being updated
     if (data.vin && data.vin !== existingVehicle.vin) {
       const existingVin = await this.prisma.vehicle.findUnique({
-        where: { vin: data.vin },
+        where: { 
+          vin: data.vin,
+          isActive: true 
+        },
       });
 
       if (existingVin) {

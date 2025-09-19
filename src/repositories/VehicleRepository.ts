@@ -174,7 +174,10 @@ export class VehicleRepository {
 
   async findByLicensePlate(licensePlate: string): Promise<Vehicle | null> {
     return this.prisma.vehicle.findUnique({
-      where: { licensePlate },
+      where: { 
+        licensePlate,
+        isActive: true 
+      },
     });
   }
 
