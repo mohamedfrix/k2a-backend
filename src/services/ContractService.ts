@@ -22,7 +22,7 @@ export class ContractService {
     private clientRepository: ClientRepository
   ) {}
 
-  // Create a new contract
+  // Create a new contract with atomic booking conflict detection
   async createContract(input: CreateContractInput): Promise<ContractResponse> {
     // Validate client exists and is active
     const client = await this.clientRepository.findById(input.clientId);
@@ -64,26 +64,21 @@ export class ContractService {
       throw new Error('End date must be after start date');
     }
 
-    // Check vehicle availability for the requested period
-    const availabilityRequest: VehicleAvailabilityRequest = {
-      vehicleId: input.vehicleId,
-      startDate: start,
-      endDate: end
-    };
-    
-    const availability = await this.contractRepository.checkVehicleAvailability(availabilityRequest);
-    if (!availability.available) {
-      throw new Error(`Vehicle is not available for the selected dates. Conflicting contracts: ${availability.conflictingContracts.map(c => c.contractNumber).join(', ')}`);
-    }
-
     // Validate service type is supported by vehicle
     const vehicleServices = vehicle.rentalServices.map(rs => rs.rentalServiceType);
     if (!vehicleServices.includes(input.serviceType)) {
       throw new Error(`Vehicle does not support ${input.serviceType} service type`);
     }
 
-    // Create the contract
-    return await this.contractRepository.create(input);
+    // Create the contract with atomic booking validation
+    // This prevents race conditions by checking availability within the same transaction
+    const finalInput = {
+      ...input,
+      startDate: start,
+      endDate: end
+    };
+    
+    return await this.contractRepository.createWithBookingValidation(finalInput);
   }
 
   // Get all contracts with filtering and pagination
@@ -103,7 +98,7 @@ export class ContractService {
       throw new Error('Contract not found');
     }
 
-    // If dates are being changed, check availability
+    // If dates are being changed, check availability atomically
     if (input.startDate || input.endDate) {
       // Normalize to local date-only for comparison
       const toLocalDateOnly = (d: any): Date | null => {
@@ -120,16 +115,19 @@ export class ContractService {
         throw new Error('End date must be after start date');
       }
 
-      const availabilityRequest: VehicleAvailabilityRequest = {
-        vehicleId: existingContract.vehicleId,
-        startDate: start,
-        endDate: end,
-        excludeContractId: id // Exclude current contract from availability check
-      };
+      // For date changes, we need to use atomic validation to prevent race conditions
+      const validation = await this.contractRepository.validateBookingAvailabilityAtomic(
+        existingContract.vehicleId,
+        start,
+        end,
+        id // Exclude current contract from conflict check
+      );
       
-      const availability = await this.contractRepository.checkVehicleAvailability(availabilityRequest);
-      if (!availability.available) {
-        throw new Error(`Vehicle is not available for the selected dates. Conflicting contracts: ${availability.conflictingContracts.map(c => c.contractNumber).join(', ')}`);
+      if (!validation.available) {
+        const conflictDetails = validation.conflictingContracts
+          .map(c => `${c.contractNumber} (${c.client.nom} ${c.client.prenom})`)
+          .join(', ');
+        throw new Error(`Booking conflict: Vehicle is not available for the selected dates. Conflicting contracts: ${conflictDetails}`);
       }
     }
 
@@ -174,40 +172,11 @@ export class ContractService {
     return updatedContract;
   }
 
-  // Confirm contract
+  // Confirm contract with atomic booking conflict detection
   async confirmContract(id: string, adminId?: string): Promise<ContractResponse> {
-    const contract = await this.contractRepository.findById(id);
-    if (!contract) {
-      throw new Error('Contract not found');
-    }
-
-    if (contract.status !== 'PENDING') {
-      throw new Error('Only pending contracts can be confirmed');
-    }
-
-    // Double-check availability before confirming
-    const availabilityRequest: VehicleAvailabilityRequest = {
-      vehicleId: contract.vehicleId,
-      startDate: contract.startDate,
-      endDate: contract.endDate,
-      excludeContractId: id
-    };
-    
-    const availability = await this.contractRepository.checkVehicleAvailability(availabilityRequest);
-    if (!availability.available) {
-      throw new Error(`Cannot confirm contract: Vehicle is no longer available for the selected dates`);
-    }
-
-    const updatedContract = await this.contractRepository.update(id, {
-      status: 'CONFIRMED',
-      ...(adminId && { adminId })
-    });
-
-    if (!updatedContract) {
-      throw new Error('Failed to confirm contract');
-    }
-
-    return updatedContract;
+    // Use atomic confirmation method to prevent race conditions
+    // This checks availability and confirms in a single transaction
+    return await this.contractRepository.confirmContractAtomic(id, adminId);
   }
 
   // Start contract (mark as active)
@@ -366,7 +335,7 @@ export class ContractService {
     return await this.contractRepository.getDashboardData();
   }
 
-  // Bulk update contract status
+  // Bulk update contract status with atomic booking validation for CONFIRMED status
   async bulkUpdateStatus(contractIds: string[], status: 'PENDING' | 'CONFIRMED' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED', adminId?: string): Promise<BulkContractResult> {
     // Validate all contracts exist and can be updated to the new status
     const contracts = await Promise.all(
@@ -398,6 +367,29 @@ export class ContractService {
       };
     }
 
+    // Special handling for CONFIRMED status - requires atomic booking validation
+    if (status === 'CONFIRMED') {
+      let successCount = 0;
+      const confirmationErrors: Array<{ contractId: string; error: string }> = [];
+
+      // Process each confirmation individually with atomic validation
+      for (const contractId of contractIds) {
+        try {
+          await this.contractRepository.confirmContractAtomic(contractId, adminId);
+          successCount++;
+        } catch (error: any) {
+          confirmationErrors.push({ contractId, error: error.message });
+        }
+      }
+
+      return {
+        success: confirmationErrors.length === 0,
+        affectedCount: successCount,
+        errors: confirmationErrors
+      };
+    }
+
+    // For other status updates, use the regular bulk update
     return await this.contractRepository.bulkUpdateStatus(contractIds, status, adminId);
   }
 
