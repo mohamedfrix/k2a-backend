@@ -14,6 +14,7 @@ import {
 import { ContractRepository } from '../repositories/ContractRepository';
 import { VehicleRepository } from '../repositories/VehicleRepository';
 import { ClientRepository } from '../repositories/ClientRepository';
+import * as XLSX from 'xlsx';
 
 export class ContractService {
   constructor(
@@ -490,5 +491,80 @@ export class ContractService {
       limit: 1000
     });
     return result.contracts;
+  }
+
+  // Export contracts to Excel using the same filtering logic as getContracts
+  async exportContractsToExcel(query: ContractQuery): Promise<Buffer> {
+    // Reuse the existing filtering logic by setting a high limit to get all matching records
+    const exportQuery = {
+      ...query,
+      page: 1,
+      limit: 50000 // Set a high limit to get all contracts matching the filters
+    };
+
+    const result = await this.contractRepository.findAll(exportQuery);
+    const contracts = result.contracts;
+
+    // Prepare data for Excel with the required columns in the specified order
+    const excelData = contracts.map(contract => {
+      // Calculate duration in days (inclusive)
+      const startDate = new Date(contract.startDate);
+      const endDate = new Date(contract.endDate);
+      const durationDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+
+      return {
+        'Contract ID': contract.contractNumber,
+        'Vehicle': `${contract.vehicle.make} ${contract.vehicle.model} (${contract.vehicle.year})`,
+        'Client (Full Name)': `${contract.client.prenom} ${contract.client.nom}`,
+        'Start Date': startDate.toISOString().split('T')[0], // Format as YYYY-MM-DD
+        'End Date': endDate.toISOString().split('T')[0], // Format as YYYY-MM-DD
+        'Duration (in days)': durationDays,
+        'Total Price': Number(contract.totalAmount),
+        'Status': contract.status,
+        'Payment Status': contract.paymentStatus
+      };
+    });
+
+    // Create workbook and worksheet
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.json_to_sheet(excelData);
+
+    // Set column widths for better readability
+    const columnWidths = [
+      { wch: 15 }, // Contract ID
+      { wch: 25 }, // Vehicle
+      { wch: 20 }, // Client
+      { wch: 12 }, // Start Date
+      { wch: 12 }, // End Date
+      { wch: 18 }, // Duration
+      { wch: 15 }, // Total Price
+      { wch: 12 }, // Status
+      { wch: 15 }  // Payment Status
+    ];
+    worksheet['!cols'] = columnWidths;
+
+    // Style the header row (make it bold)
+    const headerRange = XLSX.utils.decode_range(worksheet['!ref'] || 'A1:I1');
+    for (let col = headerRange.s.c; col <= headerRange.e.c; col++) {
+      const cellAddress = XLSX.utils.encode_cell({ r: 0, c: col });
+      if (!worksheet[cellAddress]) continue;
+      
+      worksheet[cellAddress].s = {
+        font: { bold: true },
+        fill: { fgColor: { rgb: 'E6E6FA' } }
+      };
+    }
+
+    // Add the worksheet to workbook
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Contracts');
+
+    // Generate Excel file buffer
+    const excelBuffer = XLSX.write(workbook, { 
+      type: 'buffer', 
+      bookType: 'xlsx',
+      compression: true
+    });
+
+    return excelBuffer;
   }
 }

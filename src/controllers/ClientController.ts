@@ -364,6 +364,30 @@ export class ClientController {
       return this.handleError(error, res, 'validate phone uniqueness');
     }
   };
+
+  // Export clients to Excel file
+  exportClients = async (req: Request, res: Response): Promise<Response> => {
+    try {
+      const validatedQuery = clientQuerySchema.parse(req.query);
+      
+      // Generate Excel file
+      const excelBuffer = await this.clientService.exportClientsToExcel(validatedQuery);
+      
+      // Generate dynamic filename with current date
+      const currentDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+      const filename = `clients_export_${currentDate}.xlsx`;
+      
+      // Set response headers for Excel file download
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.setHeader('Content-Length', excelBuffer.length);
+      
+      // Send the Excel file
+      return res.send(excelBuffer);
+    } catch (error) {
+      return this.handleError(error, res, 'export clients');
+    }
+  };
 }
 
 export default ClientController;

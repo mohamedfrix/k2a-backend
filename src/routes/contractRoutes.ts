@@ -28,6 +28,17 @@ router.post(
 );
 
 /**
+ * @route   GET /api/v1/contracts/export
+ * @desc    Export contracts to Excel file with filtering
+ * @access  Admin
+ */
+router.get(
+  '/export',
+  authenticateAdmin,
+  contractController.exportContracts
+);
+
+/**
  * @route   GET /api/v1/contracts
  * @desc    Get all contracts with filtering and pagination
  * @access  Admin
