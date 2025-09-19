@@ -1,6 +1,15 @@
 import { z } from 'zod';
 import { VehicleCategory, FuelType, Transmission, RentalServiceType } from '@prisma/client';
 
+// Schema for vehicle accessories
+export const vehicleAccessorySchema = z.object({
+  name: z.string().min(1, 'Accessory name is required').max(100, 'Accessory name must be 100 characters or less'),
+  description: z.string().max(500, 'Accessory description must be 500 characters or less').optional(),
+  price: z.number().min(0, 'Accessory price cannot be negative'),
+  category: z.string().max(50, 'Accessory category must be 50 characters or less').optional(),
+  isActive: z.boolean().optional().default(true),
+});
+
 export const createVehicleSchema = z.object({
   // Basic Vehicle Information
   make: z.string().min(1, 'Make is required').max(50, 'Make must be 50 characters or less'),
@@ -39,6 +48,9 @@ export const createVehicleSchema = z.object({
   
   // Rental Services (at least one required)
   rentalServices: z.array(z.nativeEnum(RentalServiceType)).min(1, 'At least one rental service is required'),
+  
+  // Accessories with pricing (optional)
+  accessories: z.array(vehicleAccessorySchema).optional(),
 });
 
 export const updateVehicleSchema = z.object({
@@ -85,6 +97,9 @@ export const updateVehicleSchema = z.object({
   
   // Rental Services
   rentalServices: z.array(z.nativeEnum(RentalServiceType)).optional(),
+  
+  // Accessories with pricing
+  accessories: z.array(vehicleAccessorySchema).optional(),
 });
 
 export const vehicleQuerySchema = z.object({
@@ -121,6 +136,11 @@ export const vehicleQuerySchema = z.object({
 // Schema for adding/removing rental services
 export const vehicleRentalServiceSchema = z.object({
   rentalServices: z.array(z.nativeEnum(RentalServiceType)).min(1, 'At least one rental service is required'),
+});
+
+// Schema for managing vehicle accessories
+export const vehicleAccessoriesSchema = z.object({
+  accessories: z.array(vehicleAccessorySchema).min(0, 'Accessories array cannot be negative'),
 });
 
 // Availability update schema
@@ -160,10 +180,12 @@ export const updateImageSchema = z.object({
   isPrimary: z.boolean().optional(),
 });
 
+export type VehicleAccessoryInput = z.infer<typeof vehicleAccessorySchema>;
 export type CreateVehicleInput = z.infer<typeof createVehicleSchema>;
 export type UpdateVehicleInput = z.infer<typeof updateVehicleSchema>;
 export type VehicleQueryInput = z.infer<typeof vehicleQuerySchema>;
 export type VehicleRentalServiceInput = z.infer<typeof vehicleRentalServiceSchema>;
+export type VehicleAccessoriesInput = z.infer<typeof vehicleAccessoriesSchema>;
 export type UpdateVehicleAvailabilityInput = z.infer<typeof updateVehicleAvailabilitySchema>;
 export type UpdateVehicleFeaturedStatusInput = z.infer<typeof updateVehicleFeaturedStatusSchema>;
 export type UpdateVehicleRatingInput = z.infer<typeof updateVehicleRatingSchema>;

@@ -1,5 +1,5 @@
 import { VehicleRepository } from '../repositories/VehicleRepository';
-import { VehicleQuery, CreateVehicleRequest, UpdateVehicleRequest, VehicleWithImages, VehicleStats } from '../types/vehicle';
+import { VehicleQuery, CreateVehicleRequest, UpdateVehicleRequest, VehicleWithImages, VehicleStats, VehicleAccessoryRequest } from '../types/vehicle';
 import { PaginatedResponse } from '../types/api';
 import { VehicleCategory, RentalServiceType, PrismaClient } from '@prisma/client';
 import { imageService } from '@/services/ImageService';
@@ -42,6 +42,11 @@ export class VehicleService {
       throw new Error('At least one rental service must be specified');
     }
 
+    // Validate accessories if provided
+    if (data.accessories) {
+      this.validateAccessories(data.accessories);
+    }
+
     return this.vehicleRepository.create(data);
   }
 
@@ -69,6 +74,11 @@ export class VehicleService {
       if (existingVin) {
         throw new Error('Vehicle with this VIN already exists');
       }
+    }
+
+    // Validate accessories if provided
+    if (data.accessories) {
+      this.validateAccessories(data.accessories);
     }
 
     return this.vehicleRepository.update(id, data);
@@ -413,5 +423,39 @@ export class VehicleService {
         ? image.imageUrl 
         : imageService.generateImageUrl(image.imageUrl)
     }));
+  }
+
+  /**
+   * Validate vehicle accessories data
+   * @private
+   */
+  private validateAccessories(accessories: VehicleAccessoryRequest[]): void {
+    // Check for duplicate accessory names
+    const names = accessories.map(acc => acc.name.toLowerCase().trim());
+    const duplicates = names.filter((name, index) => names.indexOf(name) !== index);
+    
+    if (duplicates.length > 0) {
+      throw new Error(`Duplicate accessory names found: ${duplicates.join(', ')}`);
+    }
+
+    // Validate accessory prices
+    accessories.forEach((accessory, index) => {
+      if (accessory.price < 0) {
+        throw new Error(`Accessory "${accessory.name}" has invalid price. Price must be non-negative.`);
+      }
+
+      if (accessory.price > 999999.99) {
+        throw new Error(`Accessory "${accessory.name}" price is too high. Maximum allowed price is 999,999.99.`);
+      }
+
+      // Validate accessory name
+      if (!accessory.name || accessory.name.trim().length === 0) {
+        throw new Error(`Accessory at index ${index} must have a valid name.`);
+      }
+
+      if (accessory.name.length > 100) {
+        throw new Error(`Accessory "${accessory.name}" name is too long. Maximum 100 characters allowed.`);
+      }
+    });
   }
 }

@@ -73,6 +73,7 @@ model Vehicle {
   rentalServices VehicleRentalService[]
   contracts      Contract[]
   rentRequests   RentRequest[]
+  accessories    VehicleAccessory[]
   
   isActive     Boolean           @default(true)
   createdAt    DateTime          @default(now())
@@ -106,6 +107,23 @@ model VehicleRentalService {
   
   @@unique([vehicleId, rentalServiceType])
   @@map("vehicle_rental_services")
+}
+
+model VehicleAccessory {
+  id          String   @id @default(cuid())
+  vehicleId   String
+  name        String
+  description String?
+  price       Decimal  @db.Decimal(10, 2)
+  isActive    Boolean  @default(true)
+  category    String?  // e.g., "Safety", "Comfort", "Entertainment"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  vehicle     Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  
+  @@map("vehicle_accessories")
+  @@index([vehicleId])
 }
 
 // Enums
