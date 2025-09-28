@@ -39,7 +39,7 @@ model Vehicle {
   model        String
   year         Int
   color        String
-  licensePlate String            @unique
+  licensePlate String
   vin          String?           @unique
   mileage      Int?
   fuelType     FuelType
