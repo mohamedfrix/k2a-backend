@@ -4,6 +4,7 @@ import { config } from '@/config';
 import { logger } from '@/utils/logger';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
+import * as https from 'https';
 
 /**
  * Image Service for MinIO object storage operations
@@ -15,12 +16,24 @@ export class ImageService {
 
   constructor() {
     this.bucketName = config.minio.bucketName;
+    
+    // Create HTTPS agent to handle SSL issues in production
+    const httpsAgent = new https.Agent({
+      rejectUnauthorized: false, // Allow self-signed certificates
+      // Alternative: provide specific CA certificates if needed
+      // ca: [fs.readFileSync('path/to/ca-cert.pem')]
+    });
+
     this.minioClient = new Minio.Client({
       endPoint: config.minio.endpoint,
       port: config.minio.port,
       useSSL: config.minio.useSSL,
       accessKey: config.minio.accessKey,
       secretKey: config.minio.secretKey,
+      // Add custom HTTPS agent for SSL issues
+      ...(config.minio.useSSL && {
+        agent: httpsAgent
+      })
     });
 
     this.initializeBucket();
@@ -31,6 +44,8 @@ export class ImageService {
    */
   private async initializeBucket(): Promise<void> {
     try {
+      logger.info(`Attempting to connect to MinIO at ${config.minio.useSSL ? 'https' : 'http'}://${config.minio.endpoint}:${config.minio.port}`);
+      
       const bucketExists = await this.minioClient.bucketExists(this.bucketName);
       if (!bucketExists) {
         await this.minioClient.makeBucket(this.bucketName, 'us-east-1');
@@ -51,10 +66,19 @@ export class ImageService {
         
         await this.minioClient.setBucketPolicy(this.bucketName, JSON.stringify(policy));
         logger.info(`MinIO bucket policy set for public read access`);
+      } else {
+        logger.info(`MinIO bucket '${this.bucketName}' already exists and is accessible`);
       }
-    } catch (error) {
-      logger.error('Error initializing MinIO bucket:', error);
-      throw new Error('Failed to initialize MinIO storage');
+    } catch (error: any) {
+      logger.error('Error initializing MinIO bucket:', {
+        error: error.message,
+        code: error.code,
+        statusCode: error.statusCode,
+        endpoint: `${config.minio.useSSL ? 'https' : 'http'}://${config.minio.endpoint}:${config.minio.port}`,
+        useSSL: config.minio.useSSL,
+        bucket: this.bucketName
+      });
+      throw new Error(`Failed to initialize MinIO storage: ${error.message}`);
     }
   }
 
